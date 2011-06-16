@@ -43,7 +43,7 @@ void read_limited(CodedInputStream *cis, size_t limit,
   CodedInputStream::Limit l = cis->PushLimit(limit);
 
   if (!msg->ParseFromCodedStream(cis)) {
-    std::cerr << "could not parse" << std::endl;
+    cerr << "could not parse" << endl;
     exit(1);
   }
 
@@ -136,7 +136,7 @@ void setup_read_block(OpReadBlockProto *op) {
 }
 
 void send_op(int sock, uint8_t opcode, const Message &op) {
-  std::string buf;
+  string buf;
   buf.reserve(5 + op.ByteSize());
   StringOutputStream sos(&buf);
   CodedOutputStream cos(&sos);
@@ -195,7 +195,7 @@ int main(int argc, char* argv[])
   {
     if (argc != 3)
     {
-      std::cerr << "Usage: blocking_tcp_echo_client <host> <port>\n";
+      cerr << "Usage: test_readblock <host> <port>\n";
       return 1;
     }
 
@@ -230,9 +230,9 @@ int main(int argc, char* argv[])
       read_packet(&cis, hdr);
     }
   }
-  catch (std::exception& e)
+  catch (exception& e)
   {
-    std::cerr << "Exception: " << e.what() << "\n";
+    cerr << "Exception: " << e.what() << "\n";
   }
 
   return 0;

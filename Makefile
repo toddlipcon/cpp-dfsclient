@@ -1,5 +1,3 @@
-# See README.txt.
-
 PROTOC=/opt/bin/protoc
 PROTO_PKGCONFIG=/opt/lib/pkgconfig
 
@@ -23,6 +21,6 @@ protoc_middleman: proto/hdfs.proto proto/datatransfer.proto
 
 test_readblock: test_readblock.cc protoc_middleman
 	pkg-config --cflags protobuf  # fails if protobuf is not installed
-	c++ -O2 test_readblock.cc datatransfer.pb.cc hdfs.pb.cc -o teset_readblock \
+	c++ -O2 test_readblock.cc datatransfer.pb.cc hdfs.pb.cc -o test_readblock \
 	  `pkg-config --cflags --libs protobuf` -static
 
