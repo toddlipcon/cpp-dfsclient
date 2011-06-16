@@ -8,10 +8,10 @@
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include <google/protobuf/io/coded_stream.h>
-#include <zlib.h>
 
 #include "datatransfer.pb.h"
 #include "hdfs.pb.h"
+#include "crc32.h"
 
 #define DATA_TRANSFER_VERSION 27
 #define OP_READ_BLOCK 81
@@ -94,10 +94,10 @@ void read_packet(CodedInputStream *cis, const PacketHeaderProto &hdr) {
   uint8_t *chunk_start = datastart;
   int rem = hdr.datalen();
   for (int i = 0; i < chunks; i++) {
-    uint32_t cksum = crc32(0L, Z_NULL, 0);
+    uint32_t cksum = crc_init();
     size_t len = min(rem, 512);
-    cksum = crc32(cksum, chunk_start, len);
-    cksum = htonl(cksum);
+    cksum = crc_update(cksum, chunk_start, len);
+    cksum = htonl(crc_val(cksum));
     if (cksum != *checksums) {
       cerr << "Checksums did not match at " << (chunk_start - datastart)
         << ": expected=" << (*checksums) << " got: " << cksum
