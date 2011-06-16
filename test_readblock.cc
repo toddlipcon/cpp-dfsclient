@@ -5,6 +5,9 @@
 #include <cstring>
 #include <endian.h>
 #include <iostream>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/tcp.h>
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include <google/protobuf/io/coded_stream.h>
@@ -75,6 +78,16 @@ void read_packet_header(CodedInputStream *cis, PacketHeaderProto *hdr) {
   read_limited(cis, protolen, hdr);
 }
 
+void cork(int sockfd) {
+  int one = 1;
+  setsockopt(sockfd, SOL_TCP, TCP_CORK, &one, sizeof(one));
+}
+
+void uncork(int sockfd) {
+  int zero = 0;
+  setsockopt(sockfd, SOL_TCP, TCP_CORK, &zero, sizeof(zero));
+}
+
 void read_packet(CodedInputStream *cis, const PacketHeaderProto &hdr) {
   int chunks = 1 + (hdr.datalen() - 1) / 512;
   int checksumSize = chunks * 4;
@@ -96,9 +109,12 @@ void read_packet(CodedInputStream *cis, const PacketHeaderProto &hdr) {
   for (int i = 0; i < chunks; i++) {
     uint32_t cksum = crc_init();
     size_t len = min(rem, 512);
-    cksum = crc_update(cksum, chunk_start, len);
+    //cksum = crc_update(cksum, chunk_start, len);
+    
+     cksum = crc32cHardware64(cksum, chunk_start, len);
     cksum = htonl(crc_val(cksum));
-    if (cksum != *checksums) {
+    if (cksum != 3236822064) {
+    //if (cksum != 2020977330) {
       cerr << "Checksums did not match at " << (chunk_start - datastart)
         << ": expected=" << (*checksums) << " got: " << cksum
         << endl;
@@ -121,10 +137,10 @@ void setup_read_block(OpReadBlockProto *op) {
     hdr->set_clientname("test");
     BaseHeaderProto *base = hdr->mutable_baseheader();
     ExtendedBlockProto *block = base->mutable_block();
-    block->set_poolid("BP-1890200317-172.29.5.34-1308203250354");
-    block->set_blockid(-6240183935164208125L);
-    block->set_numbytes(1000L);
-    block->set_generationstamp(1001L);
+    block->set_poolid("BP-772882747-172.29.18.93-1308248727432");
+    block->set_blockid(9206959412198700111);
+    block->set_numbytes(1001L);
+    block->set_generationstamp(1002L);
     BlockTokenIdentifierProto *token = base->mutable_token();
     token->set_identifier("");
     token->set_password("");
@@ -216,8 +232,8 @@ int main(int argc, char* argv[])
 
       BlockOpResponseProto resp;
       read_vint_prefixed(&cis, &resp);
+      resp.PrintDebugString();
       read_checksum(&cis);
-      // resp.PrintDebugString();
 
       long first_chunk_offset = read_u64(&cis);
       cout << "first chunk offset: " << first_chunk_offset << endl;

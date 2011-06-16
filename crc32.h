@@ -562,5 +562,63 @@ uint32_t crc_update(uint32_t crc, uint8_t *b, size_t len) {
     }
 
     return crc;
-  }
+}
+
+// Hardware-accelerated CRC-32C (using CRC32 instruction)
+uint32_t crc32cHardware64(uint32_t crc, const void* data, size_t length) {
+#ifndef __LP64__
+    return crc32cHardware32(crc, data, length);
+#else
+    const char* p_buf = (const char*) data;
+    // alignment doesn't seem to help?
+    uint64_t crc64bit = crc;
+    for (size_t i = 0; i < length / sizeof(uint64_t); i++) {
+        crc64bit = __builtin_ia32_crc32di(crc64bit, *(uint64_t*) p_buf);
+        p_buf += sizeof(uint64_t);
+    }
+
+    // This ugly switch is slightly faster for short strings than the straightforward loop
+    uint32_t crc32bit = (uint32_t) crc64bit;
+    length &= sizeof(uint64_t) - 1;
+    /*
+    while (length > 0) {
+        crc32bit = __builtin_ia32_crc32qi(crc32bit, *p_buf++);
+        length--;
+    }
+    */
+    switch (length) {
+        case 7:
+            crc32bit = __builtin_ia32_crc32qi(crc32bit, *p_buf++);
+        case 6:
+            crc32bit = __builtin_ia32_crc32hi(crc32bit, *(uint16_t*) p_buf);
+            p_buf += 2;
+        // case 5 is below: 4 + 1
+        case 4:
+            crc32bit = __builtin_ia32_crc32si(crc32bit, *(uint32_t*) p_buf);
+            break;
+        case 3:
+            crc32bit = __builtin_ia32_crc32qi(crc32bit, *p_buf++);
+        case 2:
+            crc32bit = __builtin_ia32_crc32hi(crc32bit, *(uint16_t*) p_buf);
+            break;
+        case 5:
+            crc32bit = __builtin_ia32_crc32si(crc32bit, *(uint32_t*) p_buf);
+            p_buf += 4;
+        case 1:
+            crc32bit = __builtin_ia32_crc32qi(crc32bit, *p_buf);
+            break;
+        case 0:
+            break;
+        default:
+            // This should never happen; enable in debug code
+            assert(false);
+    }
+
+    return crc32bit;
+#endif
+}
+
+
+
+
 
