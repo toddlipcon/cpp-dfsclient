@@ -564,6 +564,31 @@ uint32_t crc_update(uint32_t crc, uint8_t *b, size_t len) {
     return crc;
 }
 
+void crc32cHardware64_3parallel(
+  uint32_t *crc_1p, const void *data_1,
+  uint32_t *crc_2p, const void *data_2,
+  uint32_t *crc_3p, const void *data_3,
+  size_t length) {
+  assert(length % 8 == 0);
+
+  uint32_t crc_1 = *crc_1p;
+  uint32_t crc_2 = *crc_2p;
+  uint32_t crc_3 = *crc_3p;
+
+  uint64_t *p1 = (uint64_t *)data_1;
+  uint64_t *p2 = (uint64_t *)data_2;
+  uint64_t *p3 = (uint64_t *)data_3;
+  for (int i = 0; i < length/8; i++) {
+    crc_1 = __builtin_ia32_crc32di(crc_1, *p1++);
+    crc_2 = __builtin_ia32_crc32di(crc_2, *p2++);
+    crc_3 = __builtin_ia32_crc32di(crc_3, *p3++);
+  }
+
+  *crc_1p = crc_1;
+  *crc_2p = crc_2;
+  *crc_3p = crc_3;
+}
+
 // Hardware-accelerated CRC-32C (using CRC32 instruction)
 uint32_t crc32cHardware64(uint32_t crc, const void* data, size_t length) {
 #ifndef __LP64__

@@ -88,6 +88,16 @@ void uncork(int sockfd) {
   setsockopt(sockfd, SOL_TCP, TCP_CORK, &zero, sizeof(zero));
 }
 
+void verify_checksum(uint32_t calculated, uint32_t expected, size_t pos) {
+    if (calculated != expected) {
+      cerr << "Checksums did not match at " << pos
+        << ": expected=" << expected << " got: " << calculated
+        << endl;
+      exit(1);
+    }
+}
+
+
 void read_packet(CodedInputStream *cis, const PacketHeaderProto &hdr) {
   int chunks = 1 + (hdr.datalen() - 1) / 512;
   int checksumSize = chunks * 4;
@@ -106,28 +116,56 @@ void read_packet(CodedInputStream *cis, const PacketHeaderProto &hdr) {
   // verify checksums
   uint8_t *chunk_start = datastart;
   int rem = hdr.datalen();
-  for (int i = 0; i < chunks; i++) {
+
+#if 1
+  int triples = (chunks - 1)/3;
+  int rem_chunks = chunks - (triples * 3);
+
+  for (int i = 0; i < triples; i++) {
+    uint32_t cksum_1 = crc_init();
+    uint32_t cksum_2 = crc_init();
+    uint32_t cksum_3 = crc_init();
+    size_t len = 512;
+   
+    crc32cHardware64_3parallel(
+      &cksum_1, chunk_start,
+      &cksum_2, chunk_start + 512,
+      &cksum_3, chunk_start + 1024,
+      512);
+  
+    verify_checksum(
+      htonl(crc_val(cksum_1)), 3236822064,
+      chunk_start - datastart);
+    verify_checksum(
+      htonl(crc_val(cksum_2)), 3236822064,
+      chunk_start - datastart + 512);
+    verify_checksum(
+      htonl(crc_val(cksum_3)), 3236822064,
+      chunk_start - datastart + 1024);
+
+    checksums += 3;
+    chunk_start += len * 3;
+    rem -= len * 3;
+  }
+#else
+  int rem_chunks = chunks;
+#endif
+
+  for (int i = 0; i < rem_chunks; i++) {
     uint32_t cksum = crc_init();
     size_t len = min(rem, 512);
-    //cksum = crc_update(cksum, chunk_start, len);
     
-     cksum = crc32cHardware64(cksum, chunk_start, len);
-    cksum = htonl(crc_val(cksum));
-    if (cksum != 3236822064) {
-    //if (cksum != 2020977330) {
-      cerr << "Checksums did not match at " << (chunk_start - datastart)
-        << ": expected=" << (*checksums) << " got: " << cksum
-        << endl;
-      exit(1);
-    }
+    cksum = crc32cHardware64(cksum, chunk_start, len);
+    verify_checksum(
+      htonl(crc_val(cksum)), 3236822064,
+      chunk_start - datastart);
     checksums++;
-
     chunk_start += len;
     rem -= len;
   }
   assert(rem == 0);
 
-  write(1, datastart, hdr.datalen());
+  //write(1, datastart, hdr.datalen());
 
   free(buf);
 }
@@ -137,10 +175,10 @@ void setup_read_block(OpReadBlockProto *op) {
     hdr->set_clientname("test");
     BaseHeaderProto *base = hdr->mutable_baseheader();
     ExtendedBlockProto *block = base->mutable_block();
-    block->set_poolid("BP-772882747-172.29.18.93-1308248727432");
-    block->set_blockid(9206959412198700111);
-    block->set_numbytes(1001L);
-    block->set_generationstamp(1002L);
+    block->set_poolid("BP-472138237-192.168.1.103-1308293347172");
+    block->set_blockid(1295452817426577524L);
+    block->set_numbytes(1011L);
+    block->set_generationstamp(1010L);
     BlockTokenIdentifierProto *token = base->mutable_token();
     token->set_identifier("");
     token->set_password("");
@@ -215,6 +253,8 @@ int main(int argc, char* argv[])
       return 1;
     }
 
+    for (int i = 0; i < 50; i++) {
+
     int port = atoi(argv[2]);
     int sockfd = connect_dn(argv[1], port);
     if (sockfd < 0) {
@@ -243,7 +283,13 @@ int main(int argc, char* argv[])
     while (!hdr.lastpacketinblock()) {
       read_packet_header(&cis, &hdr);
       // hdr.PrintDebugString();
-      read_packet(&cis, hdr);
+      if (hdr.datalen() != 0) {
+        read_packet(&cis, hdr);
+      }
+    }
+
+    close(sockfd);
+
     }
   }
   catch (exception& e)
